@@ -158,23 +158,30 @@ function EnvelopeIntro({ onOpen }: { onOpen: () => void }) {
   );
 }
 
+const UPLOAD_URL = 'https://functions.poehali.dev/a2ef0256-232a-4681-8e7b-785a5cbca919';
+const STORAGE_KEY = 'wedding_music_url';
+
 export default function Index() {
   const [opened, setOpened] = useState(false);
   const [rsvpForm, setRsvpForm] = useState({ name: '', guests: '1', attending: '', message: '' });
   const [rsvpSent, setRsvpSent] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [musicUrl, setMusicUrl] = useState<string>(() => localStorage.getItem(STORAGE_KEY) || '');
+  const [uploading, setUploading] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const timeLeft = useCountdown(WEDDING_DATE);
 
   const handleOpen = () => {
     setOpened(true);
     setTimeout(() => {
-      if (audioRef.current) {
-        audioRef.current.volume = 0.45;
+      if (audioRef.current && musicUrl) {
+        audioRef.current.volume = 0.4;
         audioRef.current.play().then(() => setPlaying(true)).catch(() => {});
       }
-    }, 500);
+    }, 600);
   };
 
   const toggleMusic = () => {
@@ -184,6 +191,34 @@ export default function Index() {
       setPlaying(false);
     } else {
       audioRef.current.play().then(() => setPlaying(true)).catch(() => {});
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+      const res = await fetch(UPLOAD_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: base64, filename: 'river-flows-in-you.mp3' }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        setMusicUrl(data.url);
+        localStorage.setItem(STORAGE_KEY, data.url);
+        setShowUpload(false);
+        if (audioRef.current) {
+          audioRef.current.load();
+          audioRef.current.volume = 0.4;
+          audioRef.current.play().then(() => setPlaying(true)).catch(() => {});
+        }
+      }
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -206,31 +241,100 @@ export default function Index() {
     <>
       {!opened && <EnvelopeIntro onOpen={handleOpen} />}
 
-      {/* Hidden audio */}
-      <audio ref={audioRef} loop src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" preload="auto">
-        {/* River Flows In You — Yiruma */}
-      </audio>
+      {/* Audio element */}
+      <audio ref={audioRef} loop src={musicUrl || undefined} preload={musicUrl ? 'auto' : 'none'} />
 
-      {/* Music button */}
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="audio/mp3,audio/mpeg,audio/*"
+        style={{ display: 'none' }}
+        onChange={handleFileUpload}
+      />
+
+      {/* Music controls */}
       {opened && (
-        <button
-          onClick={toggleMusic}
-          title={playing ? 'Пауза' : 'Играть музыку'}
-          style={{
-            position: 'fixed', bottom: 28, right: 28, zIndex: 200,
-            width: 48, height: 48, borderRadius: '50%',
-            background: playing ? '#8B6914' : 'rgba(247,244,238,0.95)',
-            border: '1px solid rgba(139,105,20,0.35)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', boxShadow: '0 4px 20px rgba(139,105,20,0.2)',
-            transition: 'all 0.3s ease',
-            color: playing ? '#f7f4ee' : '#8B6914',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
-        >
-          <Icon name={playing ? 'Pause' : 'Music'} size={18} />
-        </button>
+        <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 200, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+
+          {/* Upload panel */}
+          {showUpload && (
+            <div style={{
+              background: 'rgba(247,244,238,0.97)', backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(139,105,20,0.25)', padding: '16px 20px',
+              boxShadow: '0 8px 32px rgba(139,105,20,0.15)',
+              maxWidth: 240,
+            }}>
+              <p style={{ fontFamily: "'Golos Text', sans-serif", fontSize: '0.72rem', color: '#1a1208', marginBottom: 12, lineHeight: 1.5 }}>
+                Загрузите <strong>River Flows In You</strong><br />в формате mp3
+              </p>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                style={{
+                  width: '100%', background: uploading ? 'rgba(139,105,20,0.4)' : '#8B6914',
+                  color: '#f7f4ee', border: 'none', cursor: uploading ? 'not-allowed' : 'pointer',
+                  fontFamily: "'Golos Text', sans-serif", fontSize: '0.65rem',
+                  letterSpacing: '0.15em', textTransform: 'uppercase', padding: '10px 16px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                }}
+              >
+                {uploading
+                  ? <><Icon name="Loader" size={13} />Загружаю...</>
+                  : <><Icon name="Upload" size={13} />Выбрать файл</>
+                }
+              </button>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            {/* Upload button (show if no music) */}
+            {!musicUrl && (
+              <button
+                onClick={() => setShowUpload(v => !v)}
+                title="Загрузить музыку"
+                style={{
+                  width: 44, height: 44, borderRadius: '50%',
+                  background: 'rgba(247,244,238,0.95)', backdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(139,105,20,0.3)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', boxShadow: '0 4px 16px rgba(139,105,20,0.12)',
+                  color: '#8B6914', transition: 'transform 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+              >
+                <Icon name="Upload" size={16} />
+              </button>
+            )}
+
+            {/* Play/pause */}
+            <button
+              onClick={musicUrl ? toggleMusic : () => setShowUpload(v => !v)}
+              title={musicUrl ? (playing ? 'Пауза' : 'Играть') : 'Загрузить музыку'}
+              style={{
+                width: 44, height: 44, borderRadius: '50%',
+                background: playing ? '#8B6914' : 'rgba(247,244,238,0.95)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(139,105,20,0.35)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', boxShadow: '0 4px 16px rgba(139,105,20,0.15)',
+                color: playing ? '#f7f4ee' : '#8B6914', transition: 'all 0.25s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+            >
+              <Icon name={playing ? 'Pause' : 'Music'} size={17} />
+            </button>
+          </div>
+
+          {/* Label */}
+          {musicUrl && (
+            <p style={{ fontFamily: "'Golos Text', sans-serif", fontSize: '0.55rem', letterSpacing: '0.12em', color: 'rgba(26,18,8,0.3)', textAlign: 'right', marginTop: 2 }}>
+              River Flows In You
+            </p>
+          )}
+        </div>
       )}
 
       <div style={{ background: '#f7f4ee', minHeight: '100vh', fontFamily: "'Golos Text', sans-serif", color: '#1a1208' }}>
