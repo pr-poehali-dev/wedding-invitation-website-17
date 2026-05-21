@@ -163,7 +163,29 @@ export default function Index() {
   const [rsvpForm, setRsvpForm] = useState({ name: '', guests: '1', attending: '', message: '' });
   const [rsvpSent, setRsvpSent] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const timeLeft = useCountdown(WEDDING_DATE);
+
+  const handleOpen = () => {
+    setOpened(true);
+    setTimeout(() => {
+      if (audioRef.current) {
+        audioRef.current.volume = 0.45;
+        audioRef.current.play().then(() => setPlaying(true)).catch(() => {});
+      }
+    }, 500);
+  };
+
+  const toggleMusic = () => {
+    if (!audioRef.current) return;
+    if (playing) {
+      audioRef.current.pause();
+      setPlaying(false);
+    } else {
+      audioRef.current.play().then(() => setPlaying(true)).catch(() => {});
+    }
+  };
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
@@ -182,7 +204,34 @@ export default function Index() {
 
   return (
     <>
-      {!opened && <EnvelopeIntro onOpen={() => setOpened(true)} />}
+      {!opened && <EnvelopeIntro onOpen={handleOpen} />}
+
+      {/* Hidden audio */}
+      <audio ref={audioRef} loop src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" preload="auto">
+        {/* River Flows In You — Yiruma */}
+      </audio>
+
+      {/* Music button */}
+      {opened && (
+        <button
+          onClick={toggleMusic}
+          title={playing ? 'Пауза' : 'Играть музыку'}
+          style={{
+            position: 'fixed', bottom: 28, right: 28, zIndex: 200,
+            width: 48, height: 48, borderRadius: '50%',
+            background: playing ? '#8B6914' : 'rgba(247,244,238,0.95)',
+            border: '1px solid rgba(139,105,20,0.35)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', boxShadow: '0 4px 20px rgba(139,105,20,0.2)',
+            transition: 'all 0.3s ease',
+            color: playing ? '#f7f4ee' : '#8B6914',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+        >
+          <Icon name={playing ? 'Pause' : 'Music'} size={18} />
+        </button>
+      )}
 
       <div style={{ background: '#f7f4ee', minHeight: '100vh', fontFamily: "'Golos Text', sans-serif", color: '#1a1208' }}>
 
